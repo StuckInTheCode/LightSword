@@ -27,6 +27,7 @@ boolean soundEnable;
 byte btn_counter;                       //count of pressing
 unsigned long btn_timer;                //time of button pressing
 unsigned long sound_timer;              //time of main sound playing
+unsigned long effect_timer;             //time of light effect
 byte nowNumber;
 byte LEDcolor; 
 byte curColor, red, green, blue, redOffset, greenOffset, blueOffset;
@@ -134,7 +135,29 @@ void buttonOp() {
 
 void lightEffect() {
 
-  
+  if (swordState && ((millis() - effect_timer) >= 50) ) {           // show 
+    if(nowNumber == 11)
+    nowNumber = 0;
+    
+      char i0 = nowNumber;
+      char i1 = NUM_LEDS / 2 - nowNumber - 1;
+      char i2 = NUM_LEDS / 2 + nowNumber;
+      char i3 = NUM_LEDS - nowNumber - 1;
+      
+      setPixel(i0++, red, green, blue);                              //set prev pixels to the main color
+      setPixel(i1++, red, green, blue);
+      setPixel(i2++, red, green, blue);
+      setPixel(i3++, red, green, blue);
+      
+      for (i0,i1,i2,i3; i0 < nowNumber + 4; i0++,i1--,i2++,i3--){   //set 3 next pixels to an another color  
+          setPixel(i0, red + 20, green+ 20, blue+ 20);
+          setPixel(i1, red+ 20, green+ 20, blue+ 20);
+          setPixel(i2, red+ 20, green+ 20, blue+ 20);
+          setPixel(i3, red+ 20, green+ 20, blue+ 20);
+    }
+    FastLED.show();
+    nowNumber++;
+  }
   
 }
 
