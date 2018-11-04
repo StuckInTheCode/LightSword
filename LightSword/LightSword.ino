@@ -7,18 +7,26 @@
 #define LED_PIN 6           // led din pin
 #define BTN 3               // button pin
 #define BTN_LED 4           // control button led
+#define SD_CARD_GND A0           
 
 // library
 #include "FastLED.h"        // library for the strip
 #include <EEPROM.h>         // memory
+#include <SD.h>             // sd card
+#include <TMRpcm.h>         // play audio
+
+//object for sounds
+TMRpcm sounds;
 
 // arrray of leds
 CRGB leds[NUM_LEDS];
 
 boolean cngRequest, swordState;         //change state request, sword state 
 boolean btnState, btn_flag, hold_flag;  //button state
+boolean soundEnable;
 byte btn_counter;                       //count of pressing
 unsigned long btn_timer;                //time of button pressing
+unsigned long sound_timer;              //time of main sound playing
 byte nowNumber;
 byte LEDcolor; 
 byte curColor, red, green, blue, redOffset, greenOffset, blueOffset;
@@ -30,8 +38,22 @@ void setup() {
   FastLED.setBrightness(100);  
   pinMode(BTN, INPUT_PULLUP);
   pinMode(BTN_LED, OUTPUT);
+  pinMode(SD_CARD_GND, OUTPUT);
+  digitalWrite(SD_CARD_GND, 0);
   digitalWrite(BTN_LED, 1);
 
+  sounds.speakerPin = 9;  //setup read sounds from sd
+  sounds.setVolume(3); sounds.quality(1);
+  if (DEBUG) 
+  {
+    if (SD.begin(8)) 
+      Serial.println(F("SD OK"));
+    else 
+      Serial.println(F("SD fail"));
+  } 
+  else 
+      SD.begin(8);
+ 
 
   randomSeed(analogRead(2));    // random generator
 
@@ -52,21 +74,30 @@ void setup() {
 void loop() {
   lightEffect();      
   on_off();             //power on/off the sword
-  buttonOp();          // operation with control button
+  if (soundEnable && ((millis() - sound_timer) >= 6000) ) {           // play main sound 6 seconds
+    sounds.play("MainSound.wav");
+    sound_timer = millis();                                         
+  }
+  buttonOp();           // operation with control button
 }
 
 void on_off() {                    
   if (cngRequest) {                
-    if (!swordState)               //sword is on
+    if (!swordState)                 //sword is on
     {                 
         lightOn();  
+        soundEnable = 1;
+        sounds.play("On.wav");       // play on sound
         if (DEBUG) Serial.println(F("ON"));                
         delay(200);  
         swordState = true;          //change state to power on
     } else 
     {                        
       lightOff();   
-      if (DEBUG) Serial.println(F("OFF"));              
+      sounds.play("Off.wav");         // play off souns
+      soundEnable = 0;
+      if (DEBUG) Serial.println(F("OFF")); 
+      sounds.disable();              
       delay(300);                   
       swordState = false;             
       if (eeprom_flag) 
@@ -102,6 +133,9 @@ void buttonOp() {
 }
 
 void lightEffect() {
+
+  
+  
 }
 
 
@@ -122,10 +156,12 @@ void setAll(byte red, byte green, byte blue) {
 //animation of power on
 void lightOn() {
   char i0 = 0;
-  char i1 = NUM_LEDS / 4;
+  char i1 = NUM_LEDS / 2 - 1;
+  //char i1 = NUM_LEDS / 4;
   char i2 = NUM_LEDS / 2;
-  char i3 = (NUM_LEDS * 3) / 4;
-  for (i0,i1,i2,i3; i0 <= (NUM_LEDS / 4 - 1); i0++,i1++,i2++,i3++) {  //set every 4th led to the current color
+  char i3 = NUM_LEDS - 1;
+  //char i3 = (NUM_LEDS * 3) / 4;
+  for (i0,i1,i2,i3; i0 <= (NUM_LEDS / 4 - 1); i0++,i1--,i2++,i3--) {  //set every 4th led to the current color
     setPixel(i0, red, green, blue);
     setPixel(i1, red, green, blue);
     setPixel(i2, red, green, blue);
@@ -139,10 +175,12 @@ void lightOn() {
 // animation of power off
 void lightOff() {
   char i0 = NUM_LEDS / 4 -1;
-  char i1 = NUM_LEDS / 2 - 1;
+  //char i1 = NUM_LEDS / 2 - 1;
+  char i1 = NUM_LEDS / 4;
   char i2 = (NUM_LEDS * 3) / 4 -1 ;
-  char i3 = NUM_LEDS ;
-  for (i0,i1,i2,i3; i0 >=0; i0--, i1--, i2--, i3--) {         
+  //char i3 = NUM_LEDS - 1 ;
+  char i3 = (NUM_LEDS * 3) / 4;
+  for (i0,i1,i2,i3; i0 >=0; i0--, i1++, i2--, i3++) {         
     setPixel(i0, red, green, blue);
     setPixel(i1, red, green, blue);
     setPixel(i2, red, green, blue);
