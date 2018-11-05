@@ -10,6 +10,7 @@
 #define SD_CARD_GND A0           
 
 // library
+#include "MPU6050.h"        // accel-gyroscope library
 #include "FastLED.h"        // library for the strip
 #include <EEPROM.h>         // memory
 #include <SD.h>             // sd card
@@ -20,6 +21,9 @@ TMRpcm sounds;
 
 // arrray of leds
 CRGB leds[NUM_LEDS];
+
+//instance of the accel-gyroscope
+MPU6050 sensor;
 
 boolean cngRequest, swordState;         //change state request, sword state 
 boolean btnState, btn_flag, hold_flag;  //button state
@@ -54,7 +58,17 @@ void setup() {
   } 
   else 
       SD.begin(8);
- 
+
+  sensor.initialize(); //setup sensor
+  sensor.setFullScaleGyroRange(MPU6050_GYRO_FS_250);
+  sensor.setFullScaleAccelRange(MPU6050_ACCEL_FS_16);
+
+  if (DEBUG) {
+    if (sensor.testConnection())  
+      Serial.println(F("sensors ok"));
+    else
+      Serial.println(F("sensors fail"));
+  }
 
   randomSeed(analogRead(2));    // random generator
 
