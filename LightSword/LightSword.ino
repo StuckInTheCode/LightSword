@@ -1,7 +1,12 @@
+
 //defined parameters
 #define NUM_LEDS 30         // number of leds in the strip
 #define BTN_TIMEOUT 500     // button waiting time until pressed processing
 #define BRIGHTNESS 255      // maximum
+#define SWING 100           // minimum angular velocity
+#define STRONG_SWING 200    
+#define BLOW 100            // minimum acceleration
+#define HARD_BLOW 200      
 
 #define DEBUG 0      
 #define LED_PIN 6           // led din pin
@@ -9,11 +14,14 @@
 #define BTN_LED 4           // control button led
 #define SD_CARD_GND A0           
 
+
 // library
+#include "Wire.h"           // вспомогательная библиотека для работы с акселерометром
+#include "I2Cdev.h"         // вспомогательная библиотека для работы с акселерометром
 #include "MPU6050.h"        // accel-gyroscope library
 #include "FastLED.h"        // library for the strip
 #include <EEPROM.h>         // memory
-#include <SD.h>             // sd card
+#include <SD.h>
 #include <TMRpcm.h>         // play audio
 
 //object for sounds
@@ -32,13 +40,19 @@ byte btn_counter;                       //count of pressing
 unsigned long btn_timer;                //time of button pressing
 unsigned long sound_timer;              //time of main sound playing
 unsigned long effect_timer;             //time of light effect
+unsigned long sensor_timer,swing_timer, swing_timeout;             //time of light effect
 byte nowNumber;
 byte LEDcolor; 
 byte curColor, red, green, blue, redOffset, greenOffset, blueOffset;
-boolean eeprom_flag;
+boolean eeprom_flag, strike_flag;
+//values of coordinates get from the sensor
+int16_t ax, ay, az;
+int16_t gx, gy, gz;
+unsigned long ACC, GYR;
+int gyrX, gyrY, gyrZ, accX, accY, accZ;
 
 
-void setup() {
+void setup(){
   FastLED.addLeds<WS2811, LED_PIN, GRB>(leds, NUM_LEDS).setCorrection( TypicalLEDStrip );
   FastLED.setBrightness(100);  
   pinMode(BTN, INPUT_PULLUP);
@@ -86,17 +100,53 @@ void setup() {
   FastLED.setBrightness(BRIGHTNESS);   //max brightness
 }
 
-void loop() {
+void blow() {
+  if ((ACC > BLOW) && (ACC < HARD_BLOW)) {      // если ускорение превысило порог;
+    sounds.play("Blow.wav");               // воспроизвести звук удара
+    sound_timer = millis() - 9000 + 550;
+    strike_flag = 1;
+  }
+  if (ACC >= HARD_BLOW) {           // если ускорение превысило порог
+    sounds.play("StrBlow.wav");               // воспроизвести звук удара
+    sound_timer = millis() - 9000 + 700;
+    strike_flag = 1;
+  }
+}
+
+void swing(){
+  if (GYR > 80 && (millis() - swing_timeout > 100)) {
+    swing_timeout = millis();
+    if (((millis() - swing_timer) > 100) && !strike_flag) {
+      if (GYR >= STRONG_SWING) {      // если ускорение превысило порог
+        sounds.play("Swing.wav");               // воспроизвести звук взмаха
+        sound_timer = millis() - 9000 + 350;
+        swing_timer = millis();
+      }
+      if ((GYR > SWING) && (GYR < STRONG_SWING)) {
+        sounds.play("StrSwing.wav");               // воспроизвести звук взмаха
+        sound_timer = millis() - 9000 + 390;
+        swing_timer = millis();
+      }
+    }
+  }
+}
+
+void loop(){
+  
   lightEffect();      
   on_off();             //power on/off the sword
   if (soundEnable && ((millis() - sound_timer) >= 6000) ) {           // play main sound 6 seconds
     sounds.play("MainSound.wav");
-    sound_timer = millis();                                         
+    sound_timer = millis(); 
+    strike_flag = 0;                                        
   }
   buttonOp();           // operation with control button
+  blow();
+  swing();
+  
 }
 
-void on_off() {                    
+void on_off(){                    
   if (cngRequest) {                
     if (!swordState)                 //sword is on
     {                 
@@ -106,7 +156,8 @@ void on_off() {
         if (DEBUG) Serial.println(F("ON"));                
         delay(200);  
         swordState = true;          //change state to power on
-    } else 
+    } 
+    else 
     {                        
       lightOff();   
       sounds.play("Off.wav");         // play off souns
@@ -125,7 +176,7 @@ void on_off() {
   }
 }
 
-void buttonOp() {
+void buttonOp(){
   btnState = !digitalRead(BTN);    // true if button was pressed
   if (btnState && !btn_flag) {
     if (DEBUG) Serial.println(F("BTN PRESS"));
@@ -147,8 +198,52 @@ void buttonOp() {
   }
 }
 
-void lightEffect() {
+void checkSensorState(){
+  if (swordState) {                                               
+    if (millis() - sensor_timer > 300) {             
+                    
+      sensor.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);       // every 300ms save checked values
 
+      // найти абсолютное значение, разделить на 100
+      gyrX = abs(gx / 100);
+      gyrY = abs(gy / 100);
+      gyrZ = abs(gz / 100);
+      accX = abs(ax / 100);
+      accY = abs(ay / 100);
+      accZ = abs(az / 100);
+
+      
+      if(DEBUG){
+         Serial.print("ACC ");
+         Serial.print(accX);
+         Serial.print(" ");
+         Serial.print(accY);
+         Serial.print(" ");
+         Serial.print(accZ);
+         Serial.println(" ");
+
+         Serial.print("GYR ");
+         Serial.print(gyrX);
+         Serial.print(" ");
+         Serial.print(gyrY);
+         Serial.print(" ");
+         Serial.print(gyrZ);
+         Serial.println(" ");
+         
+    }
+
+      // найти среднеквадратичное (сумма трёх векторов в общем)
+      ACC = sq((long)accX) + sq((long)accY) + sq((long)accZ);
+      ACC = sqrt(ACC);
+      GYR = sq((long)gyrX) + sq((long)gyrY) + sq((long)gyrZ);
+      GYR = sqrt((long)GYR);
+
+    sensor_timer = millis();
+  }
+}
+}
+
+void lightEffect(){
   if (swordState && ((millis() - effect_timer) >= 50) ) {           // show 
     if(nowNumber == 11)
     nowNumber = 0;
@@ -172,7 +267,6 @@ void lightEffect() {
     FastLED.show();
     nowNumber++;
   }
-  
 }
 
 
