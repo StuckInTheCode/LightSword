@@ -110,15 +110,15 @@ void setup(){
 }
 
 void blow() {
-  if ((ACC > BLOW) && (ACC < HARD_BLOW)) { // если ускорение превысило порог;
-    sounds.play("BL.wav");               // воспроизвести звук удара
+  if ((ACC > BLOW) && (ACC < HARD_BLOW)) { // if acceleration enough to play blow;
+    sounds.play("BL.wav");               // play blow
     if(DEBUG)
         Serial.println(F("BLOW_")); 
     sound_timer = millis() - SOUND + 560;
     strike_flag = 1;
   }
-  if (ACC >= HARD_BLOW) {                    // если ускорение превысило порог
-    sounds.play("SBL.wav");               // воспроизвести звук удара
+  if (ACC >= HARD_BLOW) {                    //if acceleration enough to play hard blow;
+    sounds.play("SBL.wav");               // play strong blow sound
     if(DEBUG)
         Serial.println(F("BLOWS")); 
     sound_timer = millis() - SOUND + 705;
@@ -130,19 +130,19 @@ void swing(){
   if (GYR > 80 && (millis() - swing_timeout > 100)) {
     swing_timeout = millis();
     if (((millis() - swing_timer) > 500) && !strike_flag && swing_flag) {
-      if (GYR >= STRONG_SWING) {                // если ускорение превысило порог
-        sounds.play("SW.wav");               // воспроизвести звук взмаха
-        if(DEBUG)
-        Serial.println(F("SWING_")); 
-        sound_timer = millis() - SOUND + 360;
-        swing_timer = millis();
-        swing_flag=0;
-      }
-      if ((GYR > SWING) && (GYR < STRONG_SWING)) {
-        sounds.play("SSW.wav");              // воспроизвести звук взмаха
+      if ((GYR > SWING) && (GYR < STRONG_SWING)) { //if velocity was enough to play swing
+        sounds.play("SW.wav");                     // play swing sound
         if(DEBUG)
         Serial.println(F("SWINGS")); 
         sound_timer = millis() - SOUND + 390;
+        swing_timer = millis();
+        swing_flag=0;
+      }
+      if (GYR >= STRONG_SWING) {                  // if velocity was enough to play strong swing
+        sounds.play("SSW.wav");                   //  play strong swing sound
+        if(DEBUG)
+        Serial.println(F("SWING_")); 
+        sound_timer = millis() - SOUND + 360;
         swing_timer = millis();
         swing_flag=0;
       }
@@ -163,7 +163,7 @@ void loop(){
 
 void on_off(){                    
   if (cngRequest) {                
-    if (!swordState)                 //sword is on
+    if (!swordState && (voltage() > 10 ))                 //sword is on
     {                 
 
         sounds.play("On.wav");       // play on sound
@@ -298,7 +298,7 @@ void lightEffect(){
     if(nowNumber == NUM_LEDS / 4)
     {
       nowNumber = 0;
-      setPixel(NUM_LEDS / 4 - 1 , red, green, blue);                              //set prev pixels to the main color
+      setPixel(NUM_LEDS / 4 - 1 , red, green, blue);                   //set prev pixels to the main color
       setPixel(NUM_LEDS / 4, red, green, blue);
       setPixel((3*NUM_LEDS) / 4 -1, red, green, blue);
       setPixel((3*NUM_LEDS) / 4, red, green, blue);
@@ -315,17 +315,13 @@ void lightEffect(){
       setPixel(i2-1, red, green, blue);
       setPixel(i3+1, red, green, blue);
       }
-      //redOffset = 
-      //greenOffset
-      //blueOffset
-      //for (i0,i1,i2,i3; i0 < nowNumber; i0++,i1--,i2++,i3--){   //set 3 next pixels to an another color  
+      //set 3 next pixels to an another color  
           setPixel(i0, abs(red - 80), abs(green- 80),abs( blue- 80));
           setPixel(i1, abs(red - 80), abs(green- 80),abs( blue- 80));
           setPixel(i2, abs(red - 80), abs(green- 80),abs( blue- 80));
           setPixel(i3, abs(red - 80), abs(green- 80),abs( blue- 80));
-  //  }
+  
     FastLED.show();
-  //  delay(100);
     nowNumber++;
   }
 }
@@ -475,4 +471,27 @@ void setColor(byte c) {
       break;
 
   }
+}
+
+
+byte voltage() {
+  
+  float volts = 0;
+  float k = 5;    // correlation coefficient to the real current value of the voltage of the batteries
+  for (int i = 0; i < 5; i++) {    
+    volts += ((float)analogRead(VOLT_PIN)) * k / 1024 * ((R1 + R2) / R2); //get the voltage of 5 in 10ns
+  }
+       
+  int measure = 100 * (volts / (3*5)) ;   //get the voltage*100 for 1 battery
+
+  if (measure > 380)                      //full charge
+  return map(measure, 420, 380, 100, 80);
+  else if ((measure <= 380) && (measure > 375) )
+    return map(measure, 380, 375, 80, 50);
+  else if ((measure <= 375) && (measure > 360) )
+    return map(measure, 375, 360, 50, 25);
+  else if ((measure <= 360) && (measure > 340) )
+    return map(measure, 360, 340, 25, 8);
+  else                                    //low charge
+  return map(measure, 340, 260, 8, 0);
 }
